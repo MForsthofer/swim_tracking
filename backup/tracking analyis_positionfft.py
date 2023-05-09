@@ -30,40 +30,7 @@ import os
 import math
 import pickle as pk
 
-
-def event_frequency(time, event, window_size):
-    """
-    Calculates the frequency of events within a sliding window based on time and event arrays.
-
-    Parameters:
-    time (numpy.ndarray): An array of time values in seconds.
-    event (numpy.ndarray): An array of boolean values representing the occurrence of events.
-    window_size (float): The size of the sliding window in seconds.
-
-    Returns:
-    numpy.ndarray: An array of frequencies in Hz (events per second) corresponding to each time point in the sliding window.
-    """
-
-    # Find unique time points
-    unique_time = np.unique(time)
-
-    # Initialize an array to hold frequencies
-    freq = np.zeros_like(unique_time)
-
-    # Loop over each unique time point
-    for i, t in enumerate(unique_time):
-        # Find the indices where time is within the sliding window
-        start_time = t - window_size / 2
-        end_time = t + window_size / 2
-        idx = np.where((time >= start_time) & (time <= end_time))[0]
-        # Calculate the frequency within the sliding window
-        freq[i] = event[idx].sum() / window_size
-
-    return freq
-
-plt.close('all')
-
-species = 1 #1 xenopus, 2 axolotl
+species = 2 #1 xenopus, 2 axolotl
 
 if species == 1:
     
@@ -82,32 +49,9 @@ elif species == 2:
 pixel_distance = 0.31
 framerate = 30 
 manual_swim_bout_selection = 0
-deflection_thresh = 4
+deflection_thresh = 2
 swimming_thresh = 1
 turning_thresh = 20
-
-
-def moving_average(data, window_size):
-    """
-    Computes the weighted moving average of an input array using a sliding window of a specified size, where points further
-    from the center are weighted less the farther away they are.
-
-    Parameters:
-    data (numpy.ndarray): An array of numerical values.
-    window_size (int): The size of the sliding window in number of data points.
-
-    Returns:
-    numpy.ndarray: An array of the same shape as the input data, representing the weighted moving average of the input array.
-    """
-
-    # Define the weights of the sliding window
-    weights = np.exp(-(np.arange(window_size)-(window_size-1)/2)**2/(2*(window_size/6)**2))
-
-    # Normalize the weights so that they sum to 1
-    weights /= np.sum(weights)
-
-    # Apply the sliding window to the input array
-    return np.convolve(data, weights, mode='same')
 
 
 def calc_tail_deflection(head_node_x, head_node_y, body_node_x, body_node_y, tail_node_x, tail_node_y):
@@ -360,18 +304,15 @@ for i in Path:
         
         #calculate tail oscillation data
         body_angle, tail_angle, tail_deflection = calc_tail_deflection(tracks_matrix[0,0,head_node,:], tracks_matrix[0,1,head_node,:], tracks_matrix[0,0,body_node,:], tracks_matrix[0,1,body_node,:],
+                                                                        tracks_matrix[0,0,tail_node,:], tracks_matrix[0,1,tail_node,:])
         
-                                                                       tracks_matrix[0,0,tail_node,:], tracks_matrix[0,1,tail_node,:])
+        plt.close('all')
         tail_vel_raw = np.diff(tail_deflection)
-        #tail_vel_raw = swimming_velocity
-        tail_vel = (savgol_filter(abs(np.diff(tail_deflection)), 31, 0))
-        # f, ax = plt.subplots()
-        # ax.set_title(filename)
-        # plt.plot(t, tail_vel_raw)
-        # plt.plot(t, tail_vel)
+        tail_vel = (savgol_filter(abs(np.diff(tail_deflection)), 59, 0))
+        plt.plot(tail_vel_raw)
+        plt.plot(tail_vel)
         active_loc = tail_vel>deflection_thresh
         active_locomotion_idx = np.where(tail_vel>deflection_thresh)[0]
-        # plt.plot(t[active_locomotion_idx], 40*np.ones(len(active_locomotion_idx)), '.')
         
         t_locomoting = 1/framerate * len(active_locomotion_idx)
         t_swimming = 1/framerate * len(np.where(abs(swimming_velocity)>swimming_thresh)[0])
@@ -519,37 +460,11 @@ for i in Path:
         #     pd.DataFrame(tf).to_excel(writer, sheet_name='frequency_domain')
         #     pd.DataFrame(resamp_fft_swim).to_excel(writer, sheet_name='swimming fft')
         #     pd.DataFrame(direction_fft).to_excel(writer, sheet_name='direction fft')
-        
-        
-        pks_pos = signal.find_peaks(tail_deflection, prominence = 12)
-        pks_neg = signal.find_peaks(tail_deflection*-1, prominence = 12)
+        pks_pos = signal.find_peaks(tail_deflection, prominence = 10)
+        pks_neg = signal.find_peaks(tail_deflection*-1, prominence = 10)
         pks = np.concatenate([pks_pos[0], pks_neg[0]])
         pks.sort()
         inst_freq = 1/np.diff(t[pks])
-        
-        instfreq = np.zeros(len(tail_deflection)-1)
-        instfreq[pks[:-1]] = inst_freq[:]
-        
-        plt.plot(t, tail_deflection[:-1])
-        plt.plot(t, instfreq)
-        plt.xlabel('time(s)')
-        plt.ylabel('blue: tail angle (°). orange: half-frequency(Hz)')
-        
-        pk_events = np.full(len(tail_deflection), False)
-        pk_events[pks] = True
-        
-        inst_rate = event_frequency(t, pk_events[:-1], 0.3)
-        plt.plot(t, tail_deflection[:-1])
-        plt.plot(t, inst_rate)
-        plt.xlabel('time(s)')
-        plt.ylabel('blue: tail angle (°). orange: half-frequency(Hz)')
-        
-        
-        y_level = np.ones(len(pks))*0
-        f, ax = plt.subplots()
-        # plt.plot(t[0:1815], tail_deflection[0:1815])
-        # plt.plot(t[pks], y_level, '.')
-        #plt.plot(inst_freq, abs(np.diff(angular_velocity)[pks[:-1]]), '.')
         
         A_inst_freq.append(inst_freq)
         A_locomotion_duration.append(t_locomoting)
@@ -576,17 +491,17 @@ A_inst_freq = np.concatenate(A_inst_freq)
 A_time = np.concatenate(A_time)
 
 
-if species==1:
-    swim_kinematics_xenopus = {'swim_velocity':A_swim_velocity, 'head angular acceleration':A_head_angular_accel, 
-                        'tail beat velocity':A_tail_velocity, 'instantaneous half beat tail frequency':A_inst_freq, 'timepoints':A_time}
-    with open('swim_kinematics_xenopus.pkl', 'wb') as tt:
-        pk.dump(swim_kinematics_xenopus, tt)
+# if species==1:
+#     swim_kinematics_xenopus = {'swim_velocity':A_swim_velocity, 'head angular acceleration':A_head_angular_accel, 
+#                        'tail beat velocity':A_tail_velocity, 'instantaneous half beat tail frequency':A_inst_freq, 'timepoints':A_time}
+#     with open('swim_kinematics_xenopus.pkl', 'wb') as tt:
+#         pk.dump(swim_kinematics_xenopus, tt)
     
-if species==2:
-    swim_kinematics_axolotl = {'swim_velocity':A_swim_velocity, 'head angular acceleration':A_head_angular_accel, 
-                        'tail beat velocity':A_tail_velocity, 'instantaneous half beat tail frequency':A_inst_freq, 'timepoints':A_time}
-    with open('swim_kinematics_axolotl.pkl', 'wb') as tt:
-        pk.dump(swim_kinematics_axolotl, tt)
+# if species==2:
+#     swim_kinematics_axolotl = {'swim_velocity':A_swim_velocity, 'head angular acceleration':A_head_angular_accel, 
+#                        'tail beat velocity':A_tail_velocity, 'instantaneous half beat tail frequency':A_inst_freq, 'timepoints':A_time}
+#     with open('swim_kinematics_axolotl.pkl', 'wb') as tt:
+#         pk.dump(swim_kinematics_axolotl, tt)
         
 
 f2, ax2 = plt.subplots()
@@ -600,10 +515,19 @@ plt.ylabel('animals (50 units = 1 animal')
 # plt.plot(savgol_filter(abs(np.diff(tail_deflection)), 9, 3))
 
 # peak detection   
+f, ax = plt.subplots()     
+pks_pos = signal.find_peaks(tail_deflection, prominence = 10)
+pks_neg = signal.find_peaks(tail_deflection*-1, prominence = 10)
+pks = np.concatenate([pks_pos[0], pks_neg[0]])
+pks.sort()
+y_level = np.ones(len(pks))*50
+plt.plot(t, tail_deflection[0:1818])
+plt.plot(t[pks], y_level, '.')
 
+#calculate tail-beat half frequency
+f2, ax2 = plt.subplots()
+#instantaneous frequency
+inst_freq = 1/np.diff(t[pks])
+plt.hist(inst_freq, bins=50)
 
-# #calculate tail-beat half frequency
-# f2, ax2 = plt.subplots()
-# #instantaneous frequency
-# inst_freq = 1/np.diff(t[pks])
-# plt.hist(inst_freq, bins=50)
+vel_filt = butfilt(swimming_velocity, 1, 9, 30)

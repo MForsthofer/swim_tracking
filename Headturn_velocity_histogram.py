@@ -11,6 +11,7 @@ import numpy as np
 
 velocities = []
 arr = np.array([])
+vel_arr = np.zeros([0,1815])
 
 Path = os.listdir()
 for i in Path:
@@ -18,10 +19,21 @@ for i in Path:
         excel_file = pd.ExcelFile(i)
         sheets = excel_file.sheet_names
         #velocities.append(pd.read_excel(excel_file, sheets[1]).iloc[:,1].values)
-        arr = np.append(arr, pd.read_excel(excel_file, sheets[1]).iloc[:,1].values)
-        n_bins = np.arange(0,1000,10)
-        plt.hist(abs(arr), n_bins, color='blue')
-        plt.xlim(10,1000)
-        plt.ylim(0, 1000)
-        plt.xlabel('Head turn velocity')
-        plt.ylabel('count')
+        arr = np.append(arr, np.diff(pd.read_excel(excel_file, sheets[1]).iloc[:,1].values))
+        # ii = 0
+        # while ii  <100:
+        #     vel_arr = np.vstack([vel_arr, pd.read_excel(excel_file, sheets[1]).iloc[:,1].values[0:1815]])
+        #     ii = ii+1
+n_bins = np.arange(0,1000,10)
+#xenopus
+# plt.hist(abs(arr), n_bins, density=True, color=[5/255, 190/255, 120/255])
+#axolotl
+plt.hist(abs(arr), n_bins, density=True, color=[242/255, 183/255, 124/255])
+plt.xlim(0,1000)
+plt.ylim(0, 0.005)
+plt.xlabel('Angular head acceleration (°)')
+plt.ylabel('Probability density')
+
+# f, ax = plt.subplots()
+# im = ax.imshow(vel_arr)
+
