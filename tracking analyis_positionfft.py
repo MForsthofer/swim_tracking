@@ -19,10 +19,8 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
-import pandas as pd
 from scipy.fft import fft
 from scipy.signal import savgol_filter
-from scipy.signal import butter
 from scipy import signal
 import json
 from scipy.interpolate import interp1d
@@ -30,6 +28,34 @@ import os
 import math
 import pickle as pk
 
+
+
+
+plt.close('all')
+
+species = 2 #1 xenopus, 2 axolotl
+
+if species == 1:
+    
+    head_node = 1   # 1 for xenopus, 2 for axolotl
+    body_node = 4 #4 for xenopus, 3 for axo
+    tail_node = 2 #2 for xenopus, 4 for axo
+    vel_node_1 = 0   #0 for xenopus, 0 for axolotl
+    vel_node_2 = 3   #3 for xenopus, 1 for axolotl
+elif species == 2: 
+    head_node = 2   # 1 for xenopus, 2 for axolotl
+    body_node = 3 #4 for xenopus, 3 for axo
+    tail_node = 4 #2 for xenopus, 4 for axo
+    vel_node_1 = 0   #0 for xenopus, 0 for axolotl
+    vel_node_2 = 1   #3 for xenopus, 1 for axolotl
+    #filename = 'axolotl_tracking.000_A157_t1.analysis.h5'
+    
+pixel_distance = 0.31
+framerate = 30 
+manual_swim_bout_selection = 0
+deflection_thresh = 4
+swimming_thresh = 1
+turning_thresh = 20
 
 def event_frequency(time, event, window_size):
     """
@@ -60,55 +86,6 @@ def event_frequency(time, event, window_size):
         freq[i] = event[idx].sum() / window_size
 
     return freq
-
-plt.close('all')
-
-species = 1 #1 xenopus, 2 axolotl
-
-if species == 1:
-    
-    head_node = 1   # 1 for xenopus, 2 for axolotl
-    body_node = 4 #4 for xenopus, 3 for axo
-    tail_node = 2 #2 for xenopus, 4 for axo
-    vel_node_1 = 0   #0 for xenopus, 0 for axolotl
-    vel_node_2 = 3   #3 for xenopus, 1 for axolotl
-elif species == 2: 
-    head_node = 2   # 1 for xenopus, 2 for axolotl
-    body_node = 3 #4 for xenopus, 3 for axo
-    tail_node = 4 #2 for xenopus, 4 for axo
-    vel_node_1 = 0   #0 for xenopus, 0 for axolotl
-    vel_node_2 = 1   #3 for xenopus, 1 for axolotl
-    #filename = 'axolotl_tracking.000_A157_t1.analysis.h5'
-pixel_distance = 0.31
-framerate = 30 
-manual_swim_bout_selection = 0
-deflection_thresh = 4
-swimming_thresh = 1
-turning_thresh = 20
-
-
-def moving_average(data, window_size):
-    """
-    Computes the weighted moving average of an input array using a sliding window of a specified size, where points further
-    from the center are weighted less the farther away they are.
-
-    Parameters:
-    data (numpy.ndarray): An array of numerical values.
-    window_size (int): The size of the sliding window in number of data points.
-
-    Returns:
-    numpy.ndarray: An array of the same shape as the input data, representing the weighted moving average of the input array.
-    """
-
-    # Define the weights of the sliding window
-    weights = np.exp(-(np.arange(window_size)-(window_size-1)/2)**2/(2*(window_size/6)**2))
-
-    # Normalize the weights so that they sum to 1
-    weights /= np.sum(weights)
-
-    # Apply the sliding window to the input array
-    return np.convolve(data, weights, mode='same')
-
 
 def calc_tail_deflection(head_node_x, head_node_y, body_node_x, body_node_y, tail_node_x, tail_node_y):
     body_angle = []
@@ -271,8 +248,6 @@ def fft_manual_selection(time, data):
     '''Takes the swim distance traces, plots them, and lets you select a start point to make an fft. 
     following the start point it will indicated how big the analysis window will be and you can reselect. '''
     f, ax = plt.subplots()
-    mngr = plt.get_current_fig_manager()
-    # to put it into the upper left corner for example:
     ax.plot(data)
     ax.set_title('Swim distance')
     ax.set_ylabel('distance (mm)')
@@ -285,9 +260,6 @@ def fft_manual_selection(time, data):
     start_idx = int(round(x_y_click_coordinates[-2][0]))
     end_idx = int(round(x_y_click_coordinates[-1][0]))
     idx_window = end_idx-start_idx
-    #cuts out the stimulus between your first and last click based on time. 
-    swim_time = time[start_idx:end_idx]
-    swim_segment = data[start_idx:end_idx]
     return (start_idx, end_idx, idx_window)
 
 def freq_max(frequencies, spectrogram, lower_threshold):
@@ -527,14 +499,6 @@ for i in Path:
         pks.sort()
         inst_freq = 1/np.diff(t[pks])
         
-        instfreq = np.zeros(len(tail_deflection)-1)
-        instfreq[pks[:-1]] = inst_freq[:]
-        
-        plt.plot(t, tail_deflection[:-1])
-        plt.plot(t, instfreq)
-        plt.xlabel('time(s)')
-        plt.ylabel('blue: tail angle (°). orange: half-frequency(Hz)')
-        
         pk_events = np.full(len(tail_deflection), False)
         pk_events[pks] = True
         
@@ -551,7 +515,7 @@ for i in Path:
         # plt.plot(t[pks], y_level, '.')
         #plt.plot(inst_freq, abs(np.diff(angular_velocity)[pks[:-1]]), '.')
         
-        A_inst_freq.append(inst_freq)
+        A_inst_freq.append(inst_rate[active_locomotion_idx[:-1]])
         A_locomotion_duration.append(t_locomoting)
         A_swimming_duration.append(t_swimming)
         A_time.append(t[active_locomotion_idx[:-1]])
